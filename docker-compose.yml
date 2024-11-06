@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  cassandra-seed:
+    image: cassandra:latest
+    container_name: cassandra-seed
+    environment:
+      - CASSANDRA_CLUSTER_NAME=URLShortenerCluster
+      - CASSANDRA_SEEDS=cassandra-seed
+      - CASSANDRA_START_RPC=true
+    networks:
+      - app-network
+    volumes:
+      - cassandra-seed-data:/var/lib/cassandra
+    ports:
+      - "9042:9042" # Expose Cassandra's default port
+
+  cassandra-node-2:
+    image: cassandra:latest
+    container_name: cassandra-node-2
+    environment:
+      - CASSANDRA_CLUSTER_NAME=URLShortenerCluster
+      - CASSANDRA_SEEDS=cassandra-seed
+      - CASSANDRA_START_RPC=true
+    networks:
+      - app-network
+    volumes:
+      - cassandra-node-2-data:/var/lib/cassandra
+
+  cassandra-node-3:
+    image: cassandra:latest
+    container_name: cassandra-node-3
+    environment:
+      - CASSANDRA_CLUSTER_NAME=URLShortenerCluster
+      - CASSANDRA_SEEDS=cassandra-seed
+      - CASSANDRA_START_RPC=true
+    networks:
+      - app-network
+    volumes:
+      - cassandra-node-3-data:/var/lib/cassandra
+
+  redis:
+    image: redis:latest
+    container_name: redis
+    networks:
+      - app-network
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379" # Expose Redis port
+
+  flask_app:
+    build: .
+    container_name: flask_app
+    depends_on:
+      - redis
+      - cassandra-seed
+    networks:
+      - app-network
+    ports:
+      - "5000:5000" # Expose Flask app port
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  cassandra-seed-data:
+  cassandra-node-2-data:
+  cassandra-node-3-data:
+  redis-data:

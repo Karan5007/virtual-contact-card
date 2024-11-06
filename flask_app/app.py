@@ -1,0 +1,58 @@
+from flask import Flask, request, redirect, jsonify
+import redis
+from cassandra.cluster import Cluster
+from cassandra.query import SimpleStatement
+
+app = Flask(__name__)
+
+# Connect to Redis
+redis_client = redis.Redis(host='redis', port=6379, decode_responses=True)
+
+# Connect to Cassandra
+cluster = Cluster(['cassandra-1', 'cassandra-2', 'cassandra-3'])  # Replace with actual container names or IPs
+session = cluster.connect()
+session.execute("CREATE KEYSPACE IF NOT EXISTS url_shortener WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 2}")
+session.set_keyspace("url_shortener")
+session.execute("CREATE TABLE IF NOT EXISTS urls (shorturl text PRIMARY KEY, longurl text)")
+
+@app.route('/shorturl', methods=['GET'])
+def get_short_url():
+    shorturl = request.args.get('shorturl')
+    if not shorturl:
+        return jsonify({"error": "shorturl parameter missing"}), 400
+
+    # Check Redis first
+    longurl = redis_client.get(shorturl)
+    if longurl:
+        return redirect(longurl)  # Found in cache, redirect immediately
+
+    # If not in Redis, check Cassandra
+    query = "SELECT longurl FROM urls WHERE shorturl = %s"
+    result = session.execute(SimpleStatement(query), (shorturl,))
+    row = result.one()
+    if row:
+        longurl = row.longurl
+        # Cache in Redis
+        redis_client.set(shorturl, longurl)
+        return redirect(longurl)
+
+    return jsonify({"error": "URL not found"}), 404
+
+@app.route('/shorturl', methods=['PUT'])
+def put_short_url():
+    data = request.json
+    shorturl = data.get('shorturl')
+    longurl = data.get('longurl')
+    if not shorturl or not longurl:
+        return jsonify({"error": "shorturl and longurl required"}), 400
+
+    # Write to Cassandra
+    query = "INSERT INTO urls (shorturl, longurl) VALUES (%s, %s)"
+    session.execute(SimpleStatement(query), (shorturl, longurl))
+
+    # Update Redis cache
+    redis_client.set(shorturl, longurl)
+    return jsonify({"message": "URL added"}), 201
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
