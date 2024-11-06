@@ -39,15 +39,30 @@ services:
     volumes:
       - cassandra-node-3-data:/var/lib/cassandra
 
-  redis:
+  redis-primary:
     image: redis:latest
-    container_name: redis
+    container_name: redis-primary
+    command: redis-server --appendonly yes --maxmemory 100mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-primary-data:/data
+    ports:
+      - "6379:6379"  # Expose Redis port for external access
     networks:
       - app-network
-    volumes:
-      - redis-data:/data
-    ports:
-      - "6379:6379" # Expose Redis port
+
+  redis-replica-1:
+    image: redis:latest
+    container_name: redis-replica-1
+    command: redis-server --slaveof redis-primary 6379 --maxmemory 100mb --maxmemory-policy allkeys-lru
+    networks:
+      - app-network
+
+  redis-replica-2:
+    image: redis:latest
+    container_name: redis-replica-2
+    command: redis-server --slaveof redis-primary 6379 --maxmemory 100mb --maxmemory-policy allkeys-lru
+    networks:
+      - app-network
 
   flask_app:
     build: .
@@ -68,4 +83,4 @@ volumes:
   cassandra-seed-data:
   cassandra-node-2-data:
   cassandra-node-3-data:
-  redis-data:
+  redis-primary-data:

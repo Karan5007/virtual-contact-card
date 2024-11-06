@@ -5,11 +5,11 @@ from cassandra.query import SimpleStatement
 
 app = Flask(__name__)
 
-# Connect to Redis
-redis_client = redis.Redis(host='redis', port=6379, decode_responses=True)
+# Connect to Redis (pointing to primary)
+redis_client = redis.Redis(host='redis-primary', port=6379, decode_responses=True)
 
-# Connect to Cassandra
-cluster = Cluster(['cassandra-1', 'cassandra-2', 'cassandra-3'])  # Replace with actual container names or IPs
+# Connect to Cassandra cluster
+cluster = Cluster(['cassandra-seed', 'cassandra-node-2', 'cassandra-node-3'])
 session = cluster.connect()
 session.execute("CREATE KEYSPACE IF NOT EXISTS url_shortener WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 2}")
 session.set_keyspace("url_shortener")
@@ -21,19 +21,18 @@ def get_short_url():
     if not shorturl:
         return jsonify({"error": "shorturl parameter missing"}), 400
 
-    # Check Redis first
+    # First check Redis
     longurl = redis_client.get(shorturl)
     if longurl:
-        return redirect(longurl)  # Found in cache, redirect immediately
+        return redirect(longurl)  # Redirect if found in cache
 
-    # If not in Redis, check Cassandra
+    # Check Cassandra if not in Redis
     query = "SELECT longurl FROM urls WHERE shorturl = %s"
     result = session.execute(SimpleStatement(query), (shorturl,))
     row = result.one()
     if row:
         longurl = row.longurl
-        # Cache in Redis
-        redis_client.set(shorturl, longurl)
+        redis_client.set(shorturl, longurl)  # Cache in Redis
         return redirect(longurl)
 
     return jsonify({"error": "URL not found"}), 404
