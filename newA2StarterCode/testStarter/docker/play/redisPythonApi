@@ -1,0 +1,107 @@
+#!/usr/local/bin/python3
+# https://pypi.org/project/redis/
+import redis
+r = redis.Redis(host='redis', port=6379, db=0)
+
+r.set("server:name", "fido")
+r.get("server:name")
+r.set("connections", 10)
+
+# set if not exists
+r.setnx("connections","sid")
+
+# Non-atomic: INCR
+# client1: GET connections
+# client2: GET connections
+# client1: SET connections 11
+# client2: SET connections 11
+
+# Atomic operations
+r.incr("connections")
+r.incr("connections")
+r.delete("connections") # not r.del!!
+r.incr("connections")
+
+# Keys with limited lifespan
+r.set("resource:lock", "Redis Demo")
+r.expire("resource:lock", 120)
+
+r.ttl("resource:lock")
+r.ttl("resource:lock")
+r.ttl("resource:lock")
+r.ttl("resource:lock")
+
+r.set("resource:lock", "Redis Demo 1")
+# TTL = -1 => infinite lifespan
+# TTL = -2 => expired/does not exist
+
+r.expire("resource:lock", 120)
+r.ttl("resource:lock")
+r.set("resource:lock", "Redis Demo 2")
+r.ttl("resource:lock")
+
+# Redis datastructures: lists
+#  RPUSH, LPUSH, LLEN, LRANGE, LPOP, and RPOP.
+
+r.rpush("friends", "Alice")
+r.rpush("friends", "Bob")
+r.lpush("friends", "Sam")
+r.llen("friends")
+
+# similar to pythons [a:b], except includes b.
+r.lrange("friends", 0, -1)
+r.lrange("friends", 0, 1)
+r.lrange("friends", 1, 2)
+r.lpop("friends")
+r.rpop("friends")
+r.rpop("friends")
+
+# Set
+# SADD, SREM, SISMEMBER, SMEMBERS , SUNION
+
+r.sadd("superpowers", "flight")
+r.sadd("superpowers", "x-ray vision")
+r.sadd("superpowers", "reflexes")
+
+r.srem("superpowers", "reflexes")
+
+# value in set
+r.sismember("superpowers", "flight")
+r.sismember("superpowers", "reflexes")
+r.smembers("superpowers")
+r.sadd("birdpowers", "pecking")
+r.sadd("birdpowers", "flight")
+r.sunion("superpowers", "birdpowers")
+
+# Sorted sets: Each member has a score
+# the dict is a mapping of element-names -> score.
+r.zadd("hackers", { "Alan Kay": 1940 })
+r.zadd("hackers", { "Grace Hopper": 1906} )
+r.zadd("hackers", { "Richard Stallman": 1953} )
+r.zadd("hackers", { "Yukihiro Matsumoto": 1965})
+r.zadd("hackers", { "Claude Shannon": 1916})
+r.zadd("hackers", { "Linus Torvalds": 1969})
+r.zadd("hackers", { "Sophie Wilson": 1957})
+r.zadd("hackers", { "Alan Turing": 1912} )
+r.zrange("hackers", 2, 4)
+
+# Hashes like python Dictionary
+r.hset("user:1000","name", "John Smith")
+r.hset("user:1000","email", "john.smith@example.com")
+r.hset("user:1000","password", "s3cret")
+r.hgetall("user:1000")
+r.hmset("user:1001", { "name": "Mary Jones", "password": "hidden", "email": "mjones@example.com"} )
+r.hget("user:1001","name")
+
+# Numeric values in hashes have INC/DEC operations...
+r.hset("user:1000", "visits", 10)
+r.hincrby("user:1000","visits", 1)
+r.hincrby("user:1000","visits", 10)
+r.hdel("user:1000", "visits")
+r.hincrby("user:1000","visits", 1)
+
+# also in python
+r.mset({ "key1":"value1", "key2": "value2" })
+r.msetnx({ "key1":"value1", "key2": "value2", "key3": "value3" })
+r.msetnx({ "key4":"value4", "key5": "value5", "key6": "value6" })
+

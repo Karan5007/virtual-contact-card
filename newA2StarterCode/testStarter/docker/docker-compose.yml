@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  cassandra_seed:
+    image: cassandra:latest
+    environment:
+      - CASSANDRA_CLUSTER_NAME=my_cluster
+      - CASSANDRA_BROADCAST_ADDRESS=cassandra_seed
+    networks:
+      - cassandra_network
+    volumes:
+      - cassandra_data:/var/lib/cassandra  # Same volume definition as other nodes
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+      replicas: 1
+
+  cassandra:
+    image: cassandra:latest
+    environment:
+      - CASSANDRA_SEEDS=cassandra_seed
+      - CASSANDRA_CLUSTER_NAME=my_cluster
+      - CASSANDRA_LISTEN_ADDRESS=auto
+    networks:
+      - cassandra_network
+    volumes:
+      - cassandra_data:/var/lib/cassandra  # Shared volume name
+    deploy:
+      mode: global
+      placement:
+        constraints: [node.role == worker]
+
+networks:
+  cassandra_network:
+    driver: overlay
+
+volumes:
+  cassandra_data:
+    driver: local

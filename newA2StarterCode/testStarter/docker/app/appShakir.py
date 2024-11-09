@@ -1,16 +1,20 @@
 from flask import Flask, request, redirect, jsonify
+# import redis
+from redis import Redis, RedisError
 from cassandra.cluster import Cluster
 from cassandra.query import SimpleStatement
-from redis import Redis, RedisError
-
 
 app = Flask(__name__)
 
 # Connect to Redis (pointing to primary)
-redis_client = redis.Redis(host='redis-primary', port=6379, decode_responses=True)
+# redis_client = redis.Redis(host='redis-primary', port=6379, decode_responses=True)
+redis_client = Redis(host="redis", port=6379, db=0, socket_connect_timeout=2, socket_timeout=2, decode_responses=True)
+print(f"Redis Client Initialized: {redis_client}")  # Debug print
 
 # Connect to Cassandra cluster
-cluster = Cluster(['cassandra-seed', 'cassandra-node-2', 'cassandra-node-3'])
+# cluster = Cluster(['cassandra-seed', 'cassandra-node-2', 'cassandra-node-3'])
+cluster = Cluster(['10.128.2.90', '10.128.3.90', '10.128.4.90'])
+# cluster = Cluster(['10.128.2.90'])
 session = cluster.connect()
 session.execute("CREATE KEYSPACE IF NOT EXISTS url_shortener WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 2}")
 session.set_keyspace("url_shortener")
@@ -55,4 +59,5 @@ def put_short_url():
     return jsonify({"message": "URL added"}), 201
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=80)
+
