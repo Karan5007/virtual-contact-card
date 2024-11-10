@@ -42,16 +42,15 @@ session.execute("""
 def health_check():
     return jsonify({"status": "healthy"}), 200
 
-@app.route('/shorturl', methods=['GET'])
+@app.route('/<shorturl>', methods=['GET'])
 def get_short_url():
-    shorturl = request.args.get('shorturl')
     if not shorturl:
         return jsonify({"error": "shorturl parameter missing"}), 400
 
     # First check Redis
     slave = get_slave_connection()
 
-    longurl = slave.get(shorturl)
+    longurl = slave.hget(shorturl, "longurl")
     if longurl:
         return redirect(longurl)  # Redirect if found in cache
 
@@ -61,16 +60,15 @@ def get_short_url():
     row = result.one()
     if row:
         longurl = row.longurl
-        redis_master.set(shorturl, longurl)  # Cache in Redis
+        redis_master.hset(shorturl, longurl, "longurl")  # Cache in Redis
         return redirect(longurl)
 
     return jsonify({"error": "URL not found"}), 404
 
-@app.route('/shorturl', methods=['PUT'])
+@app.route('/', methods=['PUT'])
 def put_short_url():
-    data = request.json
-    shorturl = data.get('shorturl')
-    longurl = data.get('longurl')
+    shorturl = request.args.get('short')
+    longurl = request.args.get('long')
     if not shorturl or not longurl:
         return jsonify({"error": "shorturl and longurl required"}), 400
 
@@ -78,7 +76,6 @@ def put_short_url():
     current_timestamp = datetime.utcnow()
 
     # Write to Cassandra
-    query = "INSERT INTO urls (shorturl, longurl, last_updated) VALUES (%s, %s, %s)"
     query = "INSERT INTO urls (shorturl, longurl, last_updated) VALUES (%s, %s, %s)"
     statement = SimpleStatement(query, consistency_level=ConsistencyLevel.QUORUM)
     session.execute(statement, (shorturl, longurl, current_timestamp))
