@@ -1,7 +1,5 @@
 #!bin/bash
 
-#!/bin/bash
-
 # Usage message
 if [ "$#" -lt 2 ]; then
     echo "Usage: $0 MANAGER_IP WORKER_IP1 WORKER_IP2 ..."
