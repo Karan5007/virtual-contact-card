@@ -1,24 +1,21 @@
 from flask import Flask, request, redirect, jsonify
-# import redis
+from datetime import datetime
 from redis import Redis, RedisError
 from cassandra.cluster import Cluster
 from cassandra.query import SimpleStatement
+from cassandra import ConsistencyLevel
 
 app = Flask(__name__)
 
 # Connect to Redis (pointing to primary)
 # redis_client = redis.Redis(host='redis-primary', port=6379, decode_responses=True)
 redis_master = Redis(host="redis-master", port=6379, db=0, socket_connect_timeout=2, socket_timeout=2, decode_responses=True)
-redis_slaves = [
-    Redis(host="redis-slave", port=6380, db=0, socket_connect_timeout=2, socket_timeout=2, decode_responses=True)
-]
-# print(f"Redis Client Initialized: {redis_client}")  # Debug print
-# Function to randomly choose a Redis slave
-def get_slave_connection():
-    return random.choice(redis_slaves)
+redis_slave = Redis(host="redis-slave", port=6380, db=0, socket_connect_timeout=2, socket_timeout=2, decode_responses=True)
+
+
 
 print(f"Redis Master Client Initialized: {redis_master}")  # Debug print
-print(f"Redis Slave Clients Initialized: {redis_slaves}")   # Debug print
+print(f"Redis Slave Clients Initialized: {redis_slave}")   # Debug print
 # Connect to Cassandra cluster
 # cluster = Cluster(['cassandra-seed', 'cassandra-node-2', 'cassandra-node-3'])
 #cluster = Cluster(['10.128.2.90', '10.128.3.90', '10.128.4.90'])
@@ -40,30 +37,33 @@ def get_short_url():
     shorturl = request.args.get('shorturl')
     if not shorturl:
         return jsonify({"error": "shorturl parameter missing"}), 400
+    longurl = None
+    try:
+        longurl = redis_slave.get(shorturl)
+    except RedisError as e:
+        print(f"Error in using Redis: {e}")  # Debug print
+    finally:
+        if longurl:
+            return redirect(longurl)  # Redirect if found in cache
+        # Check Cassandra if not in Redis or Redis is down
+        query = "SELECT longurl FROM urls WHERE shorturl = %s"
+        result = session.execute(SimpleStatement(query), (shorturl,))
+        row = result.one()
+        if row:
+            longurl = row.longurl
+            try:
+                redis_master.set(shorturl, longurl)  # Cache in Redis
+            except RedisError as e:
+                print(f"Error in using Redis: {e}")  # Debug print
+            return redirect(longurl)
 
-    # First check Redis
-    slave = get_slave_connection()
-
-    longurl = slave.get(shorturl)
-    if longurl:
-        return redirect(longurl)  # Redirect if found in cache
-
-    # Check Cassandra if not in Redis
-    query = "SELECT longurl FROM urls WHERE shorturl = %s"
-    result = session.execute(SimpleStatement(query), (shorturl,))
-    row = result.one()
-    if row:
-        longurl = row.longurl
-        redis_master.set(shorturl, longurl)  # Cache in Redis
-        return redirect(longurl)
-
-    return jsonify({"error": "URL not found"}), 404
+        return jsonify({"error": "URL not found"}), 404
 
 @app.route('/shorturl', methods=['PUT'])
 def put_short_url():
-    data = request.json
-    shorturl = data.get('shorturl')
-    longurl = data.get('longurl')
+    shorturl = request.args.get('shorturl')
+    longurl = request.args.get('longurl')
+   
     if not shorturl or not longurl:
         return jsonify({"error": "shorturl and longurl required"}), 400
 
@@ -73,20 +73,20 @@ def put_short_url():
     # Write to Cassandra
     query = "INSERT INTO urls (shorturl, longurl, last_updated) VALUES (%s, %s, %s)"
     statement = SimpleStatement(query, consistency_level=ConsistencyLevel.QUORUM)
-    session.execute(SimpleStatement(query), (shorturl, longurl))
+    session.execute(SimpleStatement(query), (shorturl, longurl, current_timestamp))
 
-    # Update Redis cache
-    slave = get_slave_connection()
-
-    cached_data = slave.hgetall(shorturl)
-    if cached_data:
-        cached_timestamp = datetime.strptime(cached_data['last_updated'], "%Y-%m-%d %H:%M:%S.%f")
-        if current_timestamp > cached_timestamp:
-            # Update cache if this write is more recent
+    try:
+        cached_data = redis_slave.hgetall(shorturl)
+        if cached_data:
+            cached_timestamp = datetime.strptime(cached_data['last_updated'], "%Y-%m-%d %H:%M:%S.%f")
+            if current_timestamp > cached_timestamp:
+                # Update cache if this write is more recent
+                redis_master.hmset(shorturl, {"longurl": longurl, "last_updated": current_timestamp.isoformat()})
+        else:
+            # No cached entry, so add it
             redis_master.hmset(shorturl, {"longurl": longurl, "last_updated": current_timestamp.isoformat()})
-    else:
-        # No cached entry, so add it
-        redis_master.hmset(shorturl, {"longurl": longurl, "last_updated": current_timestamp.isoformat()})
+    except RedisError as e:
+        print(f"Error in using Redis: {e}")  # Debug print
     return jsonify({"message": "URL added"}), 201
 
 if __name__ == '__main__':
