@@ -1,0 +1,52 @@
+#!bin/bash
+
+# Usage message
+if [ "$#" -lt 2 ]; then
+    echo "Usage: $0 MANAGER_IP WORKER_IP1 WORKER_IP2 ..."
+    exit 1
+fi
+
+# Read IPs from arguments
+MANAGER_IP=$1
+WORKER_IPS="${@:2}"
+
+# Function to remove worker nodes from the Swarm
+remove_worker_nodes() {
+    echo "Removing worker nodes from the Swarm..."
+
+    for WORKER_IP in $WORKER_IPS; do
+        echo "Connecting to worker node at $WORKER_IP to leave the Swarm..."
+        ssh -o StrictHostKeyChecking=no "$WORKER_IP" "
+            if ! command -v docker &> /dev/null; then
+                echo 'Docker is not installed on $WORKER_IP. Skipping.'
+                exit 1
+            fi
+            docker swarm leave
+            if [[ \$? -eq 0 ]]; then
+                echo 'Worker node at $WORKER_IP has successfully left the Swarm.'
+            else
+                echo 'Failed to remove worker node at $WORKER_IP. Please check manually.'
+            fi
+        "
+    done
+}
+
+# Function to remove the manager node from the Swarm
+remove_manager_node() {
+    echo "Shutting down the Swarm manager on $MANAGER_IP..."
+    docker swarm leave --force
+    if [[ $? -eq 0 ]]; then
+        echo "Swarm manager at $MANAGER_IP has successfully left the Swarm."
+    else
+        echo "Failed to shut down the Swarm manager. Please check manually."
+        exit 1
+    fi
+}
+
+# Step 1: Remove worker nodes
+remove_worker_nodes
+
+# Step 2: Shut down the manager node
+remove_manager_node
+
+echo "Swarm cluster shutdown complete!"

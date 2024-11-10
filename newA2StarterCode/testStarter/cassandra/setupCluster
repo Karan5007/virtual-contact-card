@@ -1,0 +1,28 @@
+#!/bin/bash
+
+# Usage message
+if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 IP1 IP2 IP3 ..."
+    exit 1
+fi
+
+# List of IPs passed as arguments
+IP_LIST="$@"
+
+# Folder to check/create
+FOLDER_PATH="/home/student/cassData"
+
+echo "Checking and creating folder '$FOLDER_PATH' on the provided IPs..."
+
+for IP in $IP_LIST; do
+    echo "Connecting to $IP..."
+    ssh -o StrictHostKeyChecking=no "$IP" "
+        if [ -d \"$FOLDER_PATH\" ]; then
+            echo 'Folder already exists on $IP. Skipping...'
+        else
+            mkdir -p \"$FOLDER_PATH\" && echo 'Created folder on $IP.'
+        fi
+    "
+done
+
+echo "Folder check and creation process complete."
