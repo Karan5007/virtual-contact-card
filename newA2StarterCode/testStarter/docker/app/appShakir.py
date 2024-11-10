@@ -79,8 +79,9 @@ def put_short_url():
 
     # Write to Cassandra
     query = "INSERT INTO urls (shorturl, longurl, last_updated) VALUES (%s, %s, %s)"
+    query = "INSERT INTO urls (shorturl, longurl, last_updated) VALUES (%s, %s, %s)"
     statement = SimpleStatement(query, consistency_level=ConsistencyLevel.QUORUM)
-    session.execute(SimpleStatement(query), (shorturl, longurl, current_timestamp))
+    session.execute(statement, (shorturl, longurl, current_timestamp))
     # Update Redis cache
     slave = get_slave_connection()
 
@@ -88,11 +89,11 @@ def put_short_url():
     if cached_data:
         cached_timestamp = datetime.strptime(cached_data['last_updated'], "%Y-%m-%d %H:%M:%S.%f")
         if current_timestamp > cached_timestamp:
-            # Update cache if this write is more recent
-            redis_master.hset(shorturl, {"longurl": longurl, "last_updated": current_timestamp.isoformat()})
+            redis_master.hset(shorturl, "longurl", longurl)
+            redis_master.hset(shorturl, "last_updated", current_timestamp.isoformat())
     else:
-        # No cached entry, so add it
-        redis_master.hset(shorturl, {"longurl": longurl, "last_updated": current_timestamp.isoformat()})
+        redis_master.hset(shorturl, "longurl", longurl)
+        redis_master.hset(shorturl, "last_updated", current_timestamp.isoformat())
     return jsonify({"message": "URL added"}), 201
 
 if __name__ == '__main__':
