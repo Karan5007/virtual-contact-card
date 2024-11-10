@@ -1,9 +1,9 @@
 from flask import Flask, request, redirect, jsonify
-from datetime import datetime
 from redis import Redis, RedisError
 from cassandra.cluster import Cluster
 from cassandra.query import SimpleStatement
 from cassandra import ConsistencyLevel
+from datetime import datetime
 
 app = Flask(__name__)
 
@@ -32,9 +32,12 @@ session.execute("""
     )
 """)
 
-@app.route('/shorturl', methods=['GET'])
-def get_short_url():
-    shorturl = request.args.get('shorturl')
+@app.route('/health', methods=['GET'])
+def health_check():
+    return jsonify({"status": "healthy"}), 200
+
+@app.route('/<shorturl>', methods=['GET'])
+def get_short_url(shorturl):
     if not shorturl:
         return jsonify({"error": "shorturl parameter missing"}), 400
     longurl = None
@@ -59,11 +62,10 @@ def get_short_url():
 
         return jsonify({"error": "URL not found"}), 404
 
-@app.route('/shorturl', methods=['PUT'])
+@app.route('/', methods=['PUT'])
 def put_short_url():
-    shorturl = request.args.get('shorturl')
-    longurl = request.args.get('longurl')
-   
+    shorturl = request.args.get('short')
+    longurl = request.args.get('long')
     if not shorturl or not longurl:
         return jsonify({"error": "shorturl and longurl required"}), 400
 
@@ -73,7 +75,7 @@ def put_short_url():
     # Write to Cassandra
     query = "INSERT INTO urls (shorturl, longurl, last_updated) VALUES (%s, %s, %s)"
     statement = SimpleStatement(query, consistency_level=ConsistencyLevel.QUORUM)
-    session.execute(SimpleStatement(query), (shorturl, longurl, current_timestamp))
+    session.execute(statement, (shorturl, longurl, current_timestamp))
 
     try:
         cached_data = redis_slave.hgetall(shorturl)
@@ -91,4 +93,3 @@ def put_short_url():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=80)
-
