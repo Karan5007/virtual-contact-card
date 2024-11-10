@@ -3,6 +3,7 @@ from flask import Flask, request, redirect, jsonify
 from redis import Redis, RedisError
 from cassandra.cluster import Cluster
 from cassandra.query import SimpleStatement
+from datetime import datetime
 
 app = Flask(__name__)
 
