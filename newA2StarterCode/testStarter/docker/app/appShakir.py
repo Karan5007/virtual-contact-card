@@ -8,9 +8,17 @@ app = Flask(__name__)
 
 # Connect to Redis (pointing to primary)
 # redis_client = redis.Redis(host='redis-primary', port=6379, decode_responses=True)
-redis_client = Redis(host="redis", port=6379, db=0, socket_connect_timeout=2, socket_timeout=2, decode_responses=True)
-print(f"Redis Client Initialized: {redis_client}")  # Debug print
+redis_master = Redis(host="redis-master", port=6379, db=0, socket_connect_timeout=2, socket_timeout=2, decode_responses=True)
+redis_slaves = [
+    Redis(host="redis-slave", port=6380, db=0, socket_connect_timeout=2, socket_timeout=2, decode_responses=True)
+]
+# print(f"Redis Client Initialized: {redis_client}")  # Debug print
+# Function to randomly choose a Redis slave
+def get_slave_connection():
+    return random.choice(redis_slaves)
 
+print(f"Redis Master Client Initialized: {redis_master}")  # Debug print
+print(f"Redis Slave Clients Initialized: {redis_slaves}")   # Debug print
 # Connect to Cassandra cluster
 # cluster = Cluster(['cassandra-seed', 'cassandra-node-2', 'cassandra-node-3'])
 cluster = Cluster(['10.128.2.90', '10.128.3.90', '10.128.4.90'])
@@ -27,7 +35,9 @@ def get_short_url():
         return jsonify({"error": "shorturl parameter missing"}), 400
 
     # First check Redis
-    longurl = redis_client.get(shorturl)
+    slave = get_slave_connection()
+
+    longurl = slave.get(shorturl)
     if longurl:
         return redirect(longurl)  # Redirect if found in cache
 
@@ -37,7 +47,7 @@ def get_short_url():
     row = result.one()
     if row:
         longurl = row.longurl
-        redis_client.set(shorturl, longurl)  # Cache in Redis
+        redis_master.set(shorturl, longurl)  # Cache in Redis
         return redirect(longurl)
 
     return jsonify({"error": "URL not found"}), 404
@@ -55,7 +65,7 @@ def put_short_url():
     session.execute(SimpleStatement(query), (shorturl, longurl))
 
     # Update Redis cache
-    redis_client.set(shorturl, longurl)
+    redis_master.set(shorturl, longurl)
     return jsonify({"message": "URL added"}), 201
 
 if __name__ == '__main__':
