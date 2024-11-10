@@ -18,7 +18,8 @@ for IP in $IP_LIST; do
     echo "Connecting to $IP..."
     ssh -o StrictHostKeyChecking=no "$IP" "
         if [ -d \"$FOLDER_PATH\" ]; then
-            rm -rf \"$FOLDER_PATH\"/* \"$FOLDER_PATH\"/.* 2>/dev/null || true
+            echo 'Removing all files and directories in $FOLDER_PATH...'
+            find \"$FOLDER_PATH\" -mindepth 1 -exec rm -rf {} + || true
             echo 'Cleaned folder on $IP.'
         else
             echo 'Folder does not exist on $IP. Skipping...'
