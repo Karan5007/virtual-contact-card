@@ -80,8 +80,7 @@ def put_short_url():
     # Write to Cassandra
     query = "INSERT INTO urls (shorturl, longurl, last_updated) VALUES (%s, %s, %s)"
     statement = SimpleStatement(query, consistency_level=ConsistencyLevel.QUORUM)
-    session.execute(SimpleStatement(query), (shorturl, longurl))
-
+    session.execute(SimpleStatement(query), (shorturl, longurl, current_timestamp))
     # Update Redis cache
     slave = get_slave_connection()
 
