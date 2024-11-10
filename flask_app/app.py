@@ -14,7 +14,13 @@ cluster = Cluster(['cassandra-seed', 'cassandra-node-2', 'cassandra-node-3'])
 session = cluster.connect()
 session.execute("CREATE KEYSPACE IF NOT EXISTS url_shortener WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 2}")
 session.set_keyspace("url_shortener")
-session.execute("CREATE TABLE IF NOT EXISTS urls (shorturl text PRIMARY KEY, longurl text)")
+session.execute("""
+    CREATE TABLE IF NOT EXISTS urls (
+        shorturl text PRIMARY KEY,
+        longurl text,
+        last_updated timestamp
+    )
+""")
 
 @app.route('/shorturl', methods=['GET'])
 def get_short_url():
