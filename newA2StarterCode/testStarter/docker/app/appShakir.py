@@ -3,7 +3,9 @@ from flask import Flask, request, redirect, jsonify
 from redis import Redis, RedisError
 from cassandra.cluster import Cluster
 from cassandra.query import SimpleStatement
+from cassandra import ConsistencyLevel
 from datetime import datetime
+import random
 
 app = Flask(__name__)
 
@@ -88,10 +90,10 @@ def put_short_url():
         cached_timestamp = datetime.strptime(cached_data['last_updated'], "%Y-%m-%d %H:%M:%S.%f")
         if current_timestamp > cached_timestamp:
             # Update cache if this write is more recent
-            redis_master.hmset(shorturl, {"longurl": longurl, "last_updated": current_timestamp.isoformat()})
+            redis_master.hset(shorturl, {"longurl": longurl, "last_updated": current_timestamp.isoformat()})
     else:
         # No cached entry, so add it
-        redis_master.hmset(shorturl, {"longurl": longurl, "last_updated": current_timestamp.isoformat()})
+        redis_master.hset(shorturl, {"longurl": longurl, "last_updated": current_timestamp.isoformat()})
     return jsonify({"message": "URL added"}), 201
 
 if __name__ == '__main__':
