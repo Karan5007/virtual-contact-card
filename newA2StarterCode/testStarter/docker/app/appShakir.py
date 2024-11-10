@@ -43,7 +43,7 @@ def health_check():
     return jsonify({"status": "healthy"}), 200
 
 @app.route('/<shorturl>', methods=['GET'])
-def get_short_url():
+def get_short_url(shorturl):
     if not shorturl:
         return jsonify({"error": "shorturl parameter missing"}), 400
 
