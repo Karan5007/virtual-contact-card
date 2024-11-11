@@ -1,0 +1,45 @@
+#!/bin/bash
+
+# Usage message
+if [ "$#" -ne 1 ]; then
+    echo "Usage: $0 <Worker-IP>"
+    exit 1
+fi
+
+# Arguments
+WORKER_IP="$1"
+
+# Get the Swarm join token for workers
+JOIN_TOKEN=$(docker swarm join-token -q worker)
+
+# Ensure the token was retrieved
+if [ -z "$JOIN_TOKEN" ]; then
+    echo "Error: Unable to retrieve Docker Swarm join token. Ensure this machine is a Swarm manager."
+    exit 1
+fi
+
+# Get the Swarm manager's IP and port
+MANAGER_IP=$(docker info --format '{{.Swarm.NodeAddr}}')
+
+if [ -z "$MANAGER_IP" ]; then
+    echo "Error: Unable to determine Swarm manager IP address. Ensure Docker Swarm is initialized."
+    exit 1
+fi
+
+# Docker Swarm join command
+SWARM_JOIN_CMD="docker swarm join --token $JOIN_TOKEN $MANAGER_IP:2377"
+
+# SSH into the worker node and run the join command
+echo "Registering worker node at $WORKER_IP to Docker Swarm..."
+ssh -o StrictHostKeyChecking=no student@$WORKER_IP << EOF
+    echo "Joining Docker Swarm..."
+    $SWARM_JOIN_CMD
+EOF
+
+# Verify the worker node has joined successfully
+if [ $? -eq 0 ]; then
+    echo "Worker node $WORKER_IP has successfully joined the Swarm."
+else
+    echo "Error: Failed to add worker node $WORKER_IP to the Swarm."
+    exit 1
+fi
