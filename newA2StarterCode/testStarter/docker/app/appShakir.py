@@ -5,6 +5,7 @@ from cassandra.query import SimpleStatement
 from cassandra import ConsistencyLevel
 from datetime import datetime
 from cassandra import OperationTimedOut
+from cassandra.cluster import NoHostAvailable
 from collections import deque
 import logging
 
@@ -24,7 +25,14 @@ logging.info("Redis Slave Client Initialized: %s", redis_slave)
 def initialize_cassandra_connection():
     try:
         # Connect to Cassandra cluster
-        cluster = Cluster(['10.128.2.116', '10.128.3.116', '10.128.4.116'])
+        reconnection_policy = ConstantReconnectionPolicy(1, max_attempts=1)
+
+        cluster = Cluster(
+            ['10.128.2.116', '10.128.3.116', '10.128.4.116'],
+            connect_timeout=5,
+            reconnection_policy=reconnection_policy,
+        )
+
         session = cluster.connect()
         
         # Create keyspace if not exists
@@ -45,6 +53,8 @@ def initialize_cassandra_connection():
         logging.error("Connection to Cassandra cluster timed out: %s", e)
     except Exception as e:
         logging.error("Error connecting to Cassandra: %s", e)
+    except NoHostAvailable as e:
+        logging.error("No available hosts for Cassandra connection: %s", e)
     return None  # Return None if the connection fails
     
 session = initialize_cassandra_connection()
