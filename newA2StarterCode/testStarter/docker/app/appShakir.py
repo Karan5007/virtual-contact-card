@@ -89,14 +89,14 @@ def get_short_url(shorturl):
     global session
     if not shorturl:
         return jsonify({"error": "shorturl parameter missing"}), 404
-    longurl = None
+    cache_data = None
     try:
-        longurl = redis_slave.get(shorturl)
+        cache_data = redis_slave.hgetall(shorturl)
     except RedisError as e:
         logging.error("Error using Redis: %s", e)
     finally:
-        if longurl:
-            return redirect(longurl, code=307) # Redirect if found in cache
+        if cache_data:
+            return redirect(cache_data['longurl'], code=307) # Redirect if found in cache
         # Check Cassandra if not in Redis or Redis is down
         # Check if Cassandra is up
         processedQueue = False
@@ -113,7 +113,8 @@ def get_short_url(shorturl):
         if row:
             longurl = row.longurl
             try:
-                redis_master.set(shorturl, longurl)  # Cache in Redis
+                redis_master.hset(shorturl, {"longurl": longurl, "last_updated": row.last_updated.isoformat()})
+
             except RedisError as e:
                 logging.error("Error using Redis: %s", e)
             return redirect(longurl, code=307)
@@ -160,7 +161,7 @@ def put_short_url():
             # No cached entry, so add it
             redis_master.hset(shorturl, {"longurl": longurl, "last_updated": current_timestamp.isoformat()})
     except RedisError as e:
-        logging.error("Error using Redis: %s", e)
+        logging.error("Error using Redis Line 163: %s", e)
     return jsonify({"message": "URL added"}), 201
 
 if __name__ == '__main__':
