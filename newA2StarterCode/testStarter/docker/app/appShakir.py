@@ -66,10 +66,10 @@ def process_retry_queue():
                     cached_timestamp = datetime.fromisoformat(cached_data['last_updated'])
                     if current_timestamp > cached_timestamp:
                         # Update cache if this write is more recent
-                        redis_master.hmset(shorturl, {"longurl": longurl, "last_updated": current_timestamp.isoformat()})
+                        redis_master.hset(shorturl, {"longurl": longurl, "last_updated": current_timestamp.isoformat()})
                 else:
                     # No cached entry, so add it
-                    redis_master.hmset(shorturl, {"longurl": longurl, "last_updated": current_timestamp.isoformat()})
+                    redis_master.hset(shorturl, {"longurl": longurl, "last_updated": current_timestamp.isoformat()})
             except RedisError as e:
                 logging.error("Error updating Redis: %s", e)
                 
@@ -155,10 +155,10 @@ def put_short_url():
             cached_timestamp = datetime.fromisoformat(cached_data['last_updated'])
             if current_timestamp > cached_timestamp:
                 # Update cache if this write is more recent
-                redis_master.hmset(shorturl, {"longurl": longurl, "last_updated": current_timestamp.isoformat()})
+                redis_master.hset(shorturl, {"longurl": longurl, "last_updated": current_timestamp.isoformat()})
         else:
             # No cached entry, so add it
-            redis_master.hmset(shorturl, {"longurl": longurl, "last_updated": current_timestamp.isoformat()})
+            redis_master.hset(shorturl, {"longurl": longurl, "last_updated": current_timestamp.isoformat()})
     except RedisError as e:
         logging.error("Error using Redis: %s", e)
     return jsonify({"message": "URL added"}), 201
