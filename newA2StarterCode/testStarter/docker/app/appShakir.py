@@ -25,6 +25,7 @@ def initialize_cassandra_connection():
     try:
         # Connect to Cassandra cluster
         cluster = Cluster(['10.128.2.116', '10.128.3.116', '10.128.4.116'])
+        
         session = cluster.connect()
         
         # Create keyspace if not exists
@@ -66,10 +67,10 @@ def process_retry_queue():
                     cached_timestamp = datetime.fromisoformat(cached_data['last_updated'])
                     if current_timestamp > cached_timestamp:
                         # Update cache if this write is more recent
-                        redis_master.hset(shorturl, {"longurl": longurl, "last_updated": current_timestamp.isoformat()})
+                        redis_master.hset(shorturl, mapping={"longurl": longurl, "last_updated": current_timestamp.isoformat()})
                 else:
                     # No cached entry, so add it
-                    redis_master.hset(shorturl, {"longurl": longurl, "last_updated": current_timestamp.isoformat()})
+                        redis_master.hset(shorturl, mapping={"longurl": longurl, "last_updated": current_timestamp.isoformat()})
             except RedisError as e:
                 logging.error("Error updating Redis: %s", e)
                 
@@ -140,12 +141,13 @@ def put_short_url():
         logging.error("Connection to Cassandra cluster timed out: %s", e)
         session = None
     except Exception as e:
-        logging.error("Error connecting to Cassandra: %s", e)
+        logging.error(" Error connecting to Cassandra: %s", e)
         session = None
     
     if session is None:
         retry_queue.append((shorturl, longurl, current_timestamp))
         session = initialize_cassandra_connection()
+        logging.info("Reached Here:")
     if session is not None:
         process_retry_queue()
        
@@ -161,7 +163,7 @@ def put_short_url():
             # No cached entry, so add it
             redis_master.hset(shorturl, mapping={"longurl": longurl, "last_updated": current_timestamp.isoformat()})
     except RedisError as e:
-        logging.error("Error using Redis Line 163: %s", e)
+        logging.error("Error using Redis: %s", e)
     return jsonify({"message": "URL added"}), 201
 
 if __name__ == '__main__':
