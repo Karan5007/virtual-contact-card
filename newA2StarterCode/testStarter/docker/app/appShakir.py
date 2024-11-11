@@ -107,7 +107,7 @@ def get_short_url(shorturl):
         if not processedQueue:
             return jsonify({"error": "URL not found in cache"}), 404
 
-        query = "SELECT longurl FROM urls WHERE shorturl = %s"
+        query = "SELECT longurl, last_updated FROM urls WHERE shorturl = %s"
         result = session.execute(SimpleStatement(query), (shorturl,))
         row = result.one()
         if row:
@@ -152,14 +152,14 @@ def put_short_url():
 
     try:
         cached_data = redis_slave.hgetall(shorturl)
-        if cached_data:
-            cached_timestamp = datetime.fromisoformat(cached_data['last_updated'])
-            if current_timestamp > cached_timestamp:
-                # Update cache if this write is more recent
-                redis_master.hset(shorturl, {"longurl": longurl, "last_updated": current_timestamp.isoformat()})
-        else:
-            # No cached entry, so add it
-            redis_master.hset(shorturl, {"longurl": longurl, "last_updated": current_timestamp.isoformat()})
+        # if cached_data:
+        #     cached_timestamp = datetime.fromisoformat(cached_data['last_updated'])
+        #     if current_timestamp > cached_timestamp:
+        #         # Update cache if this write is more recent
+        #         redis_master.hset(shorturl, {"longurl": longurl, "last_updated": current_timestamp.isoformat()})
+        # else:
+        #     # No cached entry, so add it
+        #     redis_master.hset(shorturl, {"longurl": longurl, "last_updated": current_timestamp.isoformat()})
     except RedisError as e:
         logging.error("Error using Redis Line 163: %s", e)
     return jsonify({"message": "URL added"}), 201
