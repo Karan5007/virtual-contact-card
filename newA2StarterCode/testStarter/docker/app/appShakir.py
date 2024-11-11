@@ -24,7 +24,7 @@ logging.info("Redis Slave Client Initialized: %s", redis_slave)
 def initialize_cassandra_connection():
     try:
         # Connect to Cassandra cluster
-        cluster = Cluster(['10.128.2.114', '10.128.3.114', '10.128.4.114'])
+        cluster = Cluster(['10.128.2.116', '10.128.3.116', '10.128.4.116'])
         session = cluster.connect()
         
         # Create keyspace if not exists
