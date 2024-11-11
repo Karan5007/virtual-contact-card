@@ -100,7 +100,8 @@ def get_short_url(shorturl):
         # Check Cassandra if not in Redis or Redis is down
         # Check if Cassandra is up
         processedQueue = False
-        session = initialize_cassandra_connection()
+        if session is None:
+            session = initialize_cassandra_connection()
         if session is not None:
             processedQueue = process_retry_queue()
         if not processedQueue:
@@ -129,17 +130,24 @@ def put_short_url():
 
     # Use the current timestamp
     current_timestamp = datetime.utcnow()
-    processedQueue = False
-    session = initialize_cassandra_connection()
-    if session is not None:
-        processedQueue = process_retry_queue()
-    if not processedQueue:
-        retry_queue.append((shorturl, longurl, current_timestamp))
-    else:
-        # Write to Cassandra
+
+    try:
         query = "INSERT INTO urls (shorturl, longurl, last_updated) VALUES (%s, %s, %s)"
         statement = SimpleStatement(query, consistency_level=ConsistencyLevel.QUORUM)
         session.execute(statement, (shorturl, longurl, current_timestamp))
+    except OperationTimedOut as e:
+        logging.error("Connection to Cassandra cluster timed out: %s", e)
+        session = None
+    except Exception as e:
+        logging.error("Error connecting to Cassandra: %s", e)
+        session = None
+    
+    if session is None:
+        retry_queue.append((shorturl, longurl, current_timestamp))
+        session = initialize_cassandra_connection()
+    if session is not None:
+        process_retry_queue()
+       
 
     try:
         cached_data = redis_slave.hgetall(shorturl)
