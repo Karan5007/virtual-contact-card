@@ -100,8 +100,7 @@ def get_short_url(shorturl):
         # Check Cassandra if not in Redis or Redis is down
         # Check if Cassandra is up
         processedQueue = False
-        if session is None:
-            session = initialize_cassandra_connection()
+        session = initialize_cassandra_connection()
         if session is not None:
             processedQueue = process_retry_queue()
         if not processedQueue:
@@ -131,8 +130,7 @@ def put_short_url():
     # Use the current timestamp
     current_timestamp = datetime.utcnow()
     processedQueue = False
-    if session is None:
-        session = initialize_cassandra_connection()
+    session = initialize_cassandra_connection()
     if session is not None:
         processedQueue = process_retry_queue()
     if not processedQueue:
