@@ -3,7 +3,7 @@ services:
   web:
     image: python-app
     deploy:
-      replicas: 3
+      replicas: 8
       restart_policy:
         condition: on-failure
         delay: 10s
