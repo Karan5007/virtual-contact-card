@@ -114,8 +114,7 @@ def get_short_url(shorturl):
             longurl = row.longurl
             last_updated = row.last_updated
             try:
-                redis_master.hset(shorturl, {"longurl": longurl, "last_updated": last_updated.isoformat()})
-
+                redis_master.hset(shorturl, mapping={"longurl": longurl, "last_updated": last_updated.isoformat()})
             except RedisError as e:
                 logging.error("Error using Redis: %s", e)
             return redirect(longurl, code=307)
@@ -157,10 +156,10 @@ def put_short_url():
             cached_timestamp = datetime.fromisoformat(cached_data['last_updated'])
             if current_timestamp > cached_timestamp:
                 # Update cache if this write is more recent
-                redis_master.hset(shorturl, {"longurl": longurl, "last_updated": current_timestamp.isoformat()})
+                redis_master.hset(shorturl, mapping={"longurl": longurl, "last_updated": current_timestamp.isoformat()})
         else:
             # No cached entry, so add it
-            redis_master.hset(shorturl, {"longurl": longurl, "last_updated": current_timestamp.isoformat()})
+            redis_master.hset(shorturl, mapping={"longurl": longurl, "last_updated": current_timestamp.isoformat()})
     except RedisError as e:
         logging.error("Error using Redis Line 163: %s", e)
     return jsonify({"message": "URL added"}), 201
