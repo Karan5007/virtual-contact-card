@@ -1,0 +1,4 @@
+./cleanCluster 10.11.12.5 10.11.12.8 10.11.12.24 # removes exitsing data
+./setupCluster 10.11.12.5 10.11.12.8 10.11.12.24 # sets up folders
+./startCluster 10.11.12.5 10.11.12.8 10.11.12.24 # Starts server 
+./stopCluster 10.11.12.5 10.11.12.8 10.11.12.24 # stops server

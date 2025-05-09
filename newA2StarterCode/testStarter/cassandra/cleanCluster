@@ -1,0 +1,30 @@
+#!/bin/bash
+
+# Usage message
+if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 IP1 IP2 IP3 ..."
+    exit 1
+fi
+
+# List of IPs passed as arguments
+IP_LIST="$@"
+
+# Folder to clean
+FOLDER_PATH="/home/student/cassData"
+
+echo "Cleaning folder '$FOLDER_PATH' on the provided IPs..."
+
+for IP in $IP_LIST; do
+    echo "Connecting to $IP..."
+    ssh -o StrictHostKeyChecking=no "$IP" "
+        if [ -d \"$FOLDER_PATH\" ]; then
+            echo 'Removing all files and directories in $FOLDER_PATH...'
+            find \"$FOLDER_PATH\" -mindepth 1 -exec rm -rf {} + || true
+            echo 'Cleaned folder on $IP.'
+        else
+            echo 'Folder does not exist on $IP. Skipping...'
+        fi
+    "
+done
+
+echo "Folder cleaning process complete."

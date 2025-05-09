@@ -1,0 +1,5 @@
+#!/bin/bash
+./LoadTest2.bash &
+ab -n 10000 -c 10 -g load.tsv http://localhost:4000/000000000000000000000000000000000000000
+
+

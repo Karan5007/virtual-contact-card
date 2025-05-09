@@ -1,0 +1,17 @@
+# You will have to have the cassandra cluster running for appCass.py to run.
+# See the lecture notes:
+# https://mcs.utm.utoronto.ca/~rosenbl6/csc409/24f/lectures/cassandra/
+# You will need to create the keyspace as well as the calendar table
+
+# After all of that, you can fix appCass.py (point at some of the nodes in the cluster)
+# and then you can deploy this stack. You can then exec into the container running
+# python-app and play around. For example, you can fix appCass.py and then just 
+# run it. You can modify things to see how they behave.
+# 
+# This is a free GET STARTED QUICK application for your assignment2. It involves
+# cassandra, redis and docker.
+
+docker build -t python-app . 
+docker stack deploy -c docker-compose.yml election2022
+docker container ls
+docker exec -it CONTAINERID bash 

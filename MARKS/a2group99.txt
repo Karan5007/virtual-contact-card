@@ -1,0 +1,111 @@
+Demo: 36/45
+
+	Hotfixes Penalty: 
+		???
+	Scripts: 2/2
+		[1/1] Startup complete system
+		[1/1] Teardown complete system
+
+	Docker: 8/11
+		Dockerfiles: 
+			[1/1] Web app
+			[0/1] Writer
+			[1/1] Logger
+		Swarm: CHECK yaml with group
+            [1/1] Has everything but (possibly) Cassandra, or be able to explain why.
+            [1/1] Redis master needs to be constraint for persistence
+            [1/1] Redis is started with --maxmemory flag and a cache eviction policy
+            [1/1] Redis slaves, replicas unconstrained (not fixed to nodes)
+            [1/1] Logger persistence properly configured (ask about this). 
+            [0/1] Logger, fixed >1, constrained for persistence (so multiple entries may be needed in the yaml)
+            [1/1] Web app, replicas unconstrained (not fixed to nodes)
+            [0/1] Writer replicas unconstrained (not fixed to nodes)
+
+    Web app: 10/10
+            [1/1] Replicas: Can scale up/down
+            [1/1] Handles put
+            [1/1] Handles get, present
+            [1/1] Handles get, not present
+            [1/1] Health check implemented. CHECK: Dockerfile etc.
+            Algorithm: get (look at code): 
+                [1/1] check redis slave
+                [1/1] check cassandra
+                [1/1] Reply to client
+            Algorithm: put (look at code): 
+                [1/1] place on redis blocking queue etc. for writer (pub/sub won't work)
+                [1/1] Reply to client	
+    Redis: 7/7
+        [1/1] Master
+        [1/1] Master persistence (on host). CHECK:  Dockerfile volumes
+        [1/1] Slaves: 2+
+        CHECK: Connect to redis and look around as follows
+        [1/1] Master: has blocking lists etc.
+        [1/1] Master: has cached values
+        [1/1] Slave: has cached values
+        [1/1] Algorithm: Do cached values expire
+
+	Cassandra: 3/3
+		[1/1] Can scale up/down on multiple nodes
+		[1/1] Persistence (on hosts). Check volumes.
+		CHECK: 		
+        [1/1] log in and see some stored values
+
+	Writer: 0/5
+		[0/1] Replicas: Can scale up/down
+		Algorithm: (look at code) 
+			[0/1] Reads from blocking Queue etc. (pub/sub won't work) | 
+			[0/1] Write to Cassandra
+			[0/1] Update redis cache
+			[0/1] Put message on blocking queue etc. for logger (pub/sub won't work) | 
+
+	Logger: 3/4
+        [1/1] Replicas: Can scale up/down or at least is capable of running fixed but >1
+        Algorithm: (look at code)
+            [0/1] Reads from blocking queue etc. (pub/sub won't work)
+            [1/1] Persists logs to file on host		
+        CHECK: 
+            [1/1] log in and see log file
+
+	Monitor: For containers (can use off the shelf tool) 2/2
+		[1/1] Watches Redis Master, Redis Slaves, Writers, Loggers: should see number,
+			Status of each container, and deployment.
+	    [1/1] Watches Web App (specifically via health check)
+            verify this by breaking request/response without breaking the container
+            Example: ssh students ssh into container and breaks the response
+	Monitor: Cassandra 1/1
+        [1/1] CHECK: see this running
+
+
+Report: 20/23
+	17/20 Discussing the system's architecture
+		0/3 Diagram showing
+			[0] 1 Application system
+			[0] 1 Monitoring system
+			[0] 1 Data flow
+
+		3/3 Application
+			[1] 1 Docker
+			[1] 1 Redis
+			[1] 1 Cassandra
+
+		14/14 Discussion of each of the following with respect to your system.
+			[1] 1 Consistensy
+			[1] 1 Availablity
+			[1] 1 Parition tolarance
+			[1] 1 Data paritioning
+			[1] 1 Data replication
+			[1] 1 Load balancing
+			[1] 1 Caching
+			[1] 1 Process disaster recovery
+			[1] 1 Data disaster recovery 
+			[1] 1 Orchestration
+			[1] 1 Healthcheck
+			[1] 1 Horizontal scalability
+			[1] 1 Vertical scalability
+			[1] 1 Well formatted document
+
+	2/2 Discussing the system's performance
+		[1] 1 Graph showing performance of system under load1
+		[1] 1 Analysis of system performance under load1
+
+	1/1 Discussion of the tools used during testing
