@@ -1,4 +1,4 @@
-from flask import Flask, request, redirect, jsonify
+from flask import Flask, request, jsonify
 from redis import Redis, RedisError
 from cassandra.cluster import Cluster
 from cassandra.query import SimpleStatement
@@ -29,14 +29,18 @@ def initialize_cassandra_connection():
         session = cluster.connect()
         
         # Create keyspace if not exists
-        session.execute("CREATE KEYSPACE IF NOT EXISTS url_shortener WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 2}")
-        session.set_keyspace("url_shortener")
+        session.execute("CREATE KEYSPACE IF NOT EXISTS contact_cards WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 2}")
+        session.set_keyspace("contact_cards")
         
         # Create table if not exists
         session.execute("""
-            CREATE TABLE IF NOT EXISTS urls (
+            CREATE TABLE IF NOT EXISTS contact_cards (
                 shorturl text PRIMARY KEY,
-                longurl text,
+                name text,
+                company text,
+                position text,
+                email text,
+                phone_number text,
                 last_updated timestamp
             )
         """)
@@ -52,13 +56,16 @@ session = initialize_cassandra_connection()
 
 def process_retry_queue():
     while retry_queue:
-        shorturl, longurl, current_timestamp = retry_queue.popleft()
+        shorturl, name, company, position, email, phone_number, current_timestamp = retry_queue.popleft()
         try:
             # Write to Cassandra
-            query = "INSERT INTO urls (shorturl, longurl, last_updated) VALUES (%s, %s, %s)"
+            query = """
+                INSERT INTO contact_cards (shorturl, name, company, position, email, phone_number, last_updated)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """
             statement = SimpleStatement(query, consistency_level=ConsistencyLevel.QUORUM)
-            session.execute(statement, (shorturl, longurl, current_timestamp))
-            logging.info("Inserted (%s, %s) into Cassandra.", shorturl, longurl)
+            session.execute(statement, (shorturl, name, company, position, email, phone_number, current_timestamp))
+            logging.info("Inserted (%s, %s) into Cassandra.", shorturl, name)
 
             # Update Redis after successful Cassandra insertion
             try:
@@ -67,17 +74,31 @@ def process_retry_queue():
                     cached_timestamp = datetime.fromisoformat(cached_data['last_updated'])
                     if current_timestamp > cached_timestamp:
                         # Update cache if this write is more recent
-                        redis_master.hset(shorturl, mapping={"longurl": longurl, "last_updated": current_timestamp.isoformat()})
+                        redis_master.hset(shorturl, mapping={
+                            "name": name,
+                            "company": company,
+                            "position": position,
+                            "email": email,
+                            "phone_number": phone_number,
+                            "last_updated": current_timestamp.isoformat()
+                        })
                 else:
                     # No cached entry, so add it
-                        redis_master.hset(shorturl, mapping={"longurl": longurl, "last_updated": current_timestamp.isoformat()})
+                    redis_master.hset(shorturl, mapping={
+                        "name": name,
+                        "company": company,
+                        "position": position,
+                        "email": email,
+                        "phone_number": phone_number,
+                        "last_updated": current_timestamp.isoformat()
+                    })
             except RedisError as e:
                 logging.error("Error updating Redis: %s", e)
                 
         except Exception as e:
-            logging.error("Error inserting (%s, %s) into Cassandra: %s", shorturl, longurl, e)
+            logging.error("Error inserting (%s, %s) into Cassandra: %s", shorturl, name, e)
             # Add the item to retry queue in case of failure
-            retry_queue.append((shorturl, longurl, current_timestamp))
+            retry_queue.append((shorturl, name, company, position, email, phone_number, current_timestamp))
             return False  
     return True
 
@@ -86,7 +107,7 @@ def health_check():
     return jsonify({"status": "healthy"}), 200
 
 @app.route('/<shorturl>', methods=['GET'])
-def get_short_url(shorturl):
+def get_contact_card(shorturl):
     global session
     if not shorturl:
         return jsonify({"error": "shorturl parameter missing"}), 404
@@ -95,76 +116,102 @@ def get_short_url(shorturl):
         cache_data = redis_slave.hgetall(shorturl)
     except RedisError as e:
         logging.error("Error using Redis: %s", e)
-    finally:
-        if cache_data:
-            return redirect(cache_data['longurl'], code=307) # Redirect if found in cache
-        # Check Cassandra if not in Redis or Redis is down
-        # Check if Cassandra is up
-        processedQueue = False
-        if session is None:
-            session = initialize_cassandra_connection()
-        if session is not None:
-            processedQueue = process_retry_queue()
-        if not processedQueue:
-            return jsonify({"error": "URL not found in cache"}), 404
+    
+    if cache_data:
+        return jsonify({
+            "shorturl": shorturl,
+            "name": cache_data.get("name"),
+            "company": cache_data.get("company"),
+            "position": cache_data.get("position"),
+            "email": cache_data.get("email"),
+            "phone_number": cache_data.get("phone_number"),
+            "last_updated": cache_data.get("last_updated")
+        })
 
-        query = "SELECT longurl, last_updated FROM urls WHERE shorturl = %s"
-        result = session.execute(SimpleStatement(query), (shorturl,))
-        row = result.one()
-        if row:
-            longurl = row.longurl
-            last_updated = row.last_updated
-            try:
-                redis_master.hset(shorturl, mapping={"longurl": longurl, "last_updated": last_updated.isoformat()})
-            except RedisError as e:
-                logging.error("Error using Redis: %s", e)
-            return redirect(longurl, code=307)
+    # Check Cassandra if not in Redis or Redis is down
+    processedQueue = False
+    if session is None:
+        session = initialize_cassandra_connection()
+    if session is not None:
+        processedQueue = process_retry_queue()
+    if not processedQueue:
+        return jsonify({"error": "Contact card not found in cache"}), 404
 
-        return jsonify({"error": "URL not found"}), 404
+    query = "SELECT * FROM contact_cards WHERE shorturl = %s"
+    result = session.execute(SimpleStatement(query), (shorturl,))
+    row = result.one()
+    if row:
+        redis_master.hset(shorturl, mapping={
+            "name": row.name,
+            "company": row.company,
+            "position": row.position,
+            "email": row.email,
+            "phone_number": row.phone_number,
+            "last_updated": row.last_updated.isoformat()
+        })
+        return jsonify({
+            "shorturl": shorturl,
+            "name": row.name,
+            "company": row.company,
+            "position": row.position,
+            "email": row.email,
+            "phone_number": row.phone_number,
+            "last_updated": row.last_updated.isoformat()
+        })
+
+    return jsonify({"error": "Contact card not found"}), 404
 
 @app.route('/', methods=['PUT'])
-def put_short_url():
+def put_contact_card():
     global session
     shorturl = request.args.get('short')
-    longurl = request.args.get('long')
-    if not shorturl or not longurl:
-        return jsonify({"error": "shorturl and longurl required"}), 400
+    name = request.args.get('name')
+    company = request.args.get('company')
+    position = request.args.get('position')
+    email = request.args.get('email')
+    phone_number = request.args.get('phone_number')
+    
+    if not shorturl or not name or not company or not position or not email or not phone_number:
+        return jsonify({"error": "shorturl, name, company, position, email, and phone_number are required"}), 400
 
     # Use the current timestamp
     current_timestamp = datetime.utcnow()
 
     try:
-        query = "INSERT INTO urls (shorturl, longurl, last_updated) VALUES (%s, %s, %s)"
+        query = """
+            INSERT INTO contact_cards (shorturl, name, company, position, email, phone_number, last_updated)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """
         statement = SimpleStatement(query, consistency_level=ConsistencyLevel.QUORUM)
-        session.execute(statement, (shorturl, longurl, current_timestamp))
+        session.execute(statement, (shorturl, name, company, position, email, phone_number, current_timestamp))
     except OperationTimedOut as e:
         logging.error("Connection to Cassandra cluster timed out: %s", e)
         session = None
     except Exception as e:
-        logging.error(" Error connecting to Cassandra: %s", e)
+        logging.error("Error inserting into Cassandra: %s", e)
         session = None
     
     if session is None:
-        retry_queue.append((shorturl, longurl, current_timestamp))
+        retry_queue.append((shorturl, name, company, position, email, phone_number, current_timestamp))
         session = initialize_cassandra_connection()
-        logging.info("Reached Here:")
+        logging.info("Retry queue added:")
+    
     if session is not None:
         process_retry_queue()
-       
 
     try:
-        cached_data = redis_slave.hgetall(shorturl)
-        if cached_data:
-            cached_timestamp = datetime.fromisoformat(cached_data['last_updated'])
-            if current_timestamp > cached_timestamp:
-                # Update cache if this write is more recent
-                redis_master.hset(shorturl, mapping={"longurl": longurl, "last_updated": current_timestamp.isoformat()})
-        else:
-            # No cached entry, so add it
-            redis_master.hset(shorturl, mapping={"longurl": longurl, "last_updated": current_timestamp.isoformat()})
+        redis_master.hset(shorturl, mapping={
+            "name": name,
+            "company": company,
+            "position": position,
+            "email": email,
+            "phone_number": phone_number,
+            "last_updated": current_timestamp.isoformat()
+        })
     except RedisError as e:
         logging.error("Error using Redis: %s", e)
-    return jsonify({"message": "URL added"}), 201
+
+    return jsonify({"message": "Contact card added"}), 201
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=80)
